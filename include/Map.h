@@ -179,7 +179,7 @@ protected:
 
     std::vector<MapPoint*> mvpReferenceMapPoints;
 
-    bool mbImuInitialized;
+    bool mbImuInitialized; // 做过一次初始化
 
     int mnMapChange;
     int mnMapChangeNotified;
@@ -200,8 +200,8 @@ protected:
     bool mbBad = false;
 
     bool mbIsInertial;
-    bool mbIMU_BA1;
-    bool mbIMU_BA2;
+    bool mbIMU_BA1;        // 完成第二次初始化
+    bool mbIMU_BA2;        // 完成第三次初始化
 
     // Mutex
     std::mutex mMutexMap;

@@ -121,7 +121,7 @@ public:
     // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
     bool UnprojectStereo(const int &i, Eigen::Vector3f &x3D);
 
-    ConstraintPoseImu* mpcpi;
+    ConstraintPoseImu* mpcpi; // 为下一帧提供的先验，在PoseInertialOptimizationLastKeyFrame中计算，用在PoseInertialOptimizationLastFrame
 
     bool imuIsPreintegrated();
     void setIntegrated();
@@ -231,7 +231,7 @@ public:
     // Corresponding stereo coordinate and depth for each keypoint.
     std::vector<MapPoint*> mvpMapPoints;
     // "Monocular" keypoints have a negative value.
-    std::vector<float> mvuRight;
+    std::vector<float> mvuRight; // pFrame->mvuRight[i] < 0为单目
     std::vector<float> mvDepth;
 
     // Bag of Words Vector structures.

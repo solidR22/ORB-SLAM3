@@ -225,7 +225,7 @@ void ImuCamPose::Update(const double *pu)
     ut << pu[3], pu[4], pu[5];
 
     // Update body pose
-    // 更新的是imu位姿
+    // ! 更新的是imu位姿
     twb += Rwb * ut;
     Rwb = Rwb * ExpSO3(ur);
 
@@ -249,7 +249,7 @@ void ImuCamPose::Update(const double *pu)
 
 }
 
-// 更新世界坐标系
+// 更新世界坐标系，用在更新4DOF函数中
 void ImuCamPose::UpdateW(const double *pu)
 {
     Eigen::Vector3d ur, ut;
@@ -457,6 +457,7 @@ void EdgeMonoOnlyPose::linearizeOplus()
  * @brief 双目视觉边计算雅克比，多了一维误差
  * _jacobianOplusXi对应着_vertices[0] 也就是误差对于三维点的雅克比
  * _jacobianOplusXj就对应着位姿
+ * 右相机的像素误差xr = xl - fb/z
  */
 void EdgeStereo::linearizeOplus()
 {
@@ -472,8 +473,8 @@ void EdgeStereo::linearizeOplus()
     const double inv_z2 = 1.0/(Xc(2)*Xc(2));
 
     Eigen::Matrix<double,3,3> proj_jac;
-    proj_jac.block<2,3>(0,0) = VPose->estimate().pCamera[cam_idx]->projectJac(Xc);
-    proj_jac.block<1,3>(2,0) = proj_jac.block<1,3>(0,0);
+    proj_jac.block<2,3>(0,0) = VPose->estimate().pCamera[cam_idx]->projectJac(Xc); // 左相机部分
+    proj_jac.block<1,3>(2,0) = proj_jac.block<1,3>(0,0);                // 右相机部分
     proj_jac(2,2) += bf*inv_z2;
 
     _jacobianOplusXi = -proj_jac * Rcw;
@@ -589,7 +590,7 @@ EdgeInertial::EdgeInertial(IMU::Preintegrated *pInt):JRg(pInt->JRg.cast<double>(
 
 
 /** 
- * @brief 计算误差
+ * @brief 计算误差，预积分残差
  */
 void EdgeInertial::computeError()
 {
@@ -607,8 +608,7 @@ void EdgeInertial::computeError()
 
     const Eigen::Vector3d er = LogSO3(dR.transpose()*VP1->estimate().Rwb.transpose()*VP2->estimate().Rwb);
     const Eigen::Vector3d ev = VP1->estimate().Rwb.transpose()*(VV2->estimate() - VV1->estimate() - g*dt) - dV;
-    const Eigen::Vector3d ep = VP1->estimate().Rwb.transpose()*(VP2->estimate().twb - VP1->estimate().twb
-                                                               - VV1->estimate()*dt - g*dt*dt/2) - dP;
+    const Eigen::Vector3d ep = VP1->estimate().Rwb.transpose()*(VP2->estimate().twb - VP1->estimate().twb - VV1->estimate()*dt - g*dt*dt/2) - dP;
 
     _error << er, ev, ep;
 }
@@ -642,7 +642,7 @@ void EdgeInertial::linearizeOplus()
     _jacobianOplus[0].setZero();
     // rotation
     // (0,0)起点的3*3块表示旋转残差对pose1的旋转求导
-    _jacobianOplus[0].block<3,3>(0,0) = -invJr*Rwb2.transpose()*Rwb1; // OK
+    _jacobianOplus[0].block<3,3>(0,0) = -invJr*Rwb2.transpose()*Rwb1; // 3.6.3节公式66
     // (3,0)起点的3*3块表示速度残差对pose1的旋转求导
     _jacobianOplus[0].block<3,3>(3,0) = Sophus::SO3d::hat(Rbw1*(VV2->estimate() - VV1->estimate() - g*dt)); // OK
     // (6,0)起点的3*3块表示位置残差对pose1的旋转求导
@@ -713,7 +713,7 @@ EdgeInertialGS::EdgeInertialGS(IMU::Preintegrated *pInt):JRg(pInt->JRg.cast<doub
 }
 
 
-// 计算误差
+// 计算误差，多了尺度和重力方向
 void EdgeInertialGS::computeError()
 {
     // TODO Maybe Reintegrate inertial measurments when difference between linearization point and current estimate is too big
@@ -850,7 +850,7 @@ EdgePriorPoseImu::EdgePriorPoseImu(ConstraintPoseImu *c)
 }
 
 /** 
- * @brief 先验边计算误差
+ * @brief 先验边计算误差：节点的数据 - 观测的数据
  */
 void EdgePriorPoseImu::computeError()
 {

@@ -47,7 +47,7 @@ Eigen::Matrix3f NormalizeRotation(const Eigen::Matrix3f &R)
 }
 
 /** 
- * @brief 计算右雅可比
+ * @brief 计算右雅可比，对应公式1.6
  * @param xyz 李代数
  * @return Jr
  */
@@ -81,7 +81,7 @@ Eigen::Matrix3f RightJacobianSO3(const Eigen::Vector3f &v)
 }
 
 /** 
- * @brief 计算右雅可比的逆
+ * @brief 计算右雅可比的逆，对应公式1.7
  * @param xyz so3
  * @return Jr^-1
  */
@@ -116,7 +116,7 @@ Eigen::Matrix3f InverseRightJacobianSO3(const Eigen::Vector3f &v)
 }
 
 /**
- * @brief                  计算旋转角度积分量
+ * @brief                  计算旋转角度积分量，构造函数计算了deltaR和右雅克比
  * 
  * @param[in] angVel       陀螺仪数据
  * @param[in] imuBias      陀螺仪偏置
@@ -124,7 +124,7 @@ Eigen::Matrix3f InverseRightJacobianSO3(const Eigen::Vector3f &v)
  */
 IntegratedRotation::IntegratedRotation(const Eigen::Vector3f &angVel, const Bias &imuBias, const float &time)
 {
-    // 得到考虑偏置后的角度旋转
+    // 得到考虑偏置后的角度旋转，对应3.5节公式5.1中一项
     const float x = (angVel(0) - imuBias.bwx) * time;
     const float y = (angVel(1) - imuBias.bwy) * time;
     const float z = (angVel(2) - imuBias.bwz) * time;
@@ -139,6 +139,7 @@ IntegratedRotation::IntegratedRotation(const Eigen::Vector3f &angVel, const Bias
     // 角度转成叉积的矩阵形式
     Eigen::Matrix3f W = Sophus::SO3f::hat(v);
     // eps = 1e-4 是一个小量，根据罗德里格斯公式求极限，后面的高阶小量忽略掉得到此式
+    // 计算右雅克比 公式 1.6
     if (d < eps)
     {
         deltaR = Eigen::Matrix3f::Identity() + W;
@@ -272,12 +273,12 @@ void Preintegrated::IntegrateNewMeasurement(const Eigen::Vector3f &acceleration,
     avgW = (dT * avgW + accW * dt) / (dT + dt);
 
     // Update delta position dP and velocity dV (rely on no-updated delta rotation)
-    // 根据没有更新的dR来更新dP与dV  eq.(38)
-    dP = dP + dV * dt + 0.5f * dR * acc * dt * dt;
-    dV = dV + dR * acc * dt;
+    // 根据没有更新的dR来更新预积分dP与dV  eq.(38)
+    dP = dP + dV * dt + 0.5f * dR * acc * dt * dt;  // 3.5节公式5.6
+    dV = dV + dR * acc * dt;                        // 公式5.5
 
     // Compute velocity and position parts of matrices A and B (rely on non-updated delta rotation)
-    // 根据η_ij = A * η_i,j-1 + B_j-1 * η_j-1中的Ａ矩阵和Ｂ矩阵对速度和位移进行更新
+    // 根据η_ij = A * η_i,j-1 + B_j-1 * η_j-1中的Ａ矩阵和Ｂ矩阵对速度和位移进行更新，对应公式3.4节中的38
     Eigen::Matrix<float, 3, 3> Wacc = Sophus::SO3f::hat(acc);
 
     A.block<3, 3>(3, 0) = -dR * dt * Wacc;
@@ -342,6 +343,7 @@ void Preintegrated::MergePrevious(Preintegrated *pPrev)
     bav.bay = bu.bay;
     bav.baz = bu.baz;
 
+    // 取出前面的预积分的测量值，重新计算预积分
     const std::vector<integrable> aux1 = pPrev->mvMeasurements;
     const std::vector<integrable> aux2 = mvMeasurements;
 
@@ -392,7 +394,7 @@ Eigen::Matrix3f Preintegrated::GetDeltaRotation(const Bias &b_)
     Eigen::Vector3f dbg;
     dbg << b_.bwx - b.bwx, b_.bwy - b.bwy, b_.bwz - b.bwz;
     // 考虑偏置后，dR对偏置线性化的近似求解,邱笑晨《预积分总结与公式推导》P13～P14
-    // Forster论文公式（44）yP17也有结果（但没有推导），后面两个函数GetDeltaPosition和GetDeltaPosition也是基于此推导的
+    // Forster论文公式（44）yP17也有结果（但没有推导），后面两个函数GetDeltaPosition和GetDeltaPosition也是基于此推导的，对应3.5.1节公式45
     return NormalizeRotation(dR * Sophus::SO3f::exp(JRg * dbg).matrix());
 }
 

@@ -75,6 +75,7 @@ public:
     {
         const g2o::VertexSE3Expmap *v1 = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
         Eigen::Vector2d obs(_measurement);
+    // 左目相机点重投影到右目相机
         _error = obs - pCamera->project((mTrl * v1->estimate()).map(Xw));
     }
 

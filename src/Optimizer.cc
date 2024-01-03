@@ -49,7 +49,7 @@ bool sortByVal(const pair<MapPoint *, int> &a, const pair<MapPoint *, int> &b)
 /**************************************以下为单帧优化**************************************************************/
 
 /**
- * @brief 位姿优化，纯视觉时使用。优化目标：单帧的位姿
+ * @brief 位姿优化，纯视觉Tracking时使用。优化目标：单帧的位姿
  * @param pFrame 待优化的帧
  */
 int Optimizer::PoseOptimization(Frame *pFrame)
@@ -135,13 +135,13 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                         obs << kpUn.pt.x, kpUn.pt.y;
                         // 新建节点,注意这个节点的只是优化位姿Pose
                         ORB_SLAM3::EdgeSE3ProjectXYZOnlyPose *e = new ORB_SLAM3::EdgeSE3ProjectXYZOnlyPose();
-
+                        // 插入id为0的节点，前面定义了这帧的位姿id为0
                         e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
                         e->setMeasurement(obs);
                         // 这个点的可信程度和特征点所在的图层有关，层数约高invSigma2越小，信息矩阵越小，表示误差越大，优化时考虑的比较少
                         const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave];
                         e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
-                        // 在这里使用了鲁棒核函数
+                        // 在这里使用了鲁棒核函数，当这个边的误差超过一定值时，不会过度增长
                         g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
                         e->setRobustKernel(rk);
                         rk->setDelta(deltaMono);
@@ -286,7 +286,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     {
         Tcw = pFrame->GetPose();
         vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>()));
-        // 其实就是初始化优化器,这里的参数0就算是不填写,默认也是0,也就是只对level为0的边进行优化
+        // 其实就是初始化优化器,这里的参数0就算是不填写,默认也是0,也就是只对level为0的边进行优化，后面会将误差较大的点设置为1
         optimizer.initializeOptimization(0);
         // 开始优化，优化10次
         optimizer.optimize(its[it]);
@@ -401,13 +401,13 @@ int Optimizer::PoseOptimization(Frame *pFrame)
 }
 
 /**
- * @brief 使用上一关键帧+当前帧的视觉信息和IMU信息，优化当前帧位姿
+ * @brief 使用上一关键帧+当前帧的视觉信息和IMU信息，优化当前帧位姿，在Tracking调用
  *
  * 可分为以下几个步骤：
- * // Step 1：创建g2o优化器，初始化顶点和边
- * // Step 2：启动多轮优化，剔除外点
- * // Step 3：更新当前帧位姿、速度、IMU偏置
- * // Step 4：记录当前帧的优化状态，包括参数信息和对应的海森矩阵
+ * Step 1：创建g2o优化器，初始化顶点和边
+ * Step 2：启动多轮优化，剔除外点
+ * Step 3：更新当前帧位姿、速度、IMU偏置
+ * Step 4：记录当前帧的优化状态，包括参数信息和对应的海森矩阵
  *
  * @param[in] pFrame 当前帧，也是待优化的帧
  * @param[in] bRecInit 调用这个函数的位置并没有传这个参数，因此它的值默认为false
@@ -880,7 +880,7 @@ int Optimizer::PoseInertialOptimizationLastKeyFrame(Frame *pFrame, bool bRecInit
     // H(∂ev/∂r) H(∂ev/∂t) H(∂ev/∂v)
     // H(∂ep/∂r) H(∂ep/∂t) H(∂ep/∂v)
     //每项H都是3x3，故GetHessian2的结果是9x9
-    H.block<9, 9>(0, 0) += ei->GetHessian2();
+    H.block<9, 9>(0, 0) += ei->GetHessian2(); // 当前帧旋转，平移，速度状态（下面矩阵的左上角）
 
     // J(x)取的是EdgeGyroRW中的_jacobianOplusXj，即EdgeGyroRW::computeError计算出来的_error(ebg)对当前帧bg的偏导
     //因此egr->GetHessian2的结果为：
@@ -902,13 +902,14 @@ int Optimizer::PoseInertialOptimizationLastKeyFrame(Frame *pFrame, bool bRecInit
     // ei ei ei ei ei ei ei ei ei   0      0     0    0     0    0
     // ei ei ei ei ei ei ei ei ei   0      0     0    0     0    0
     // ei ei ei ei ei ei ei ei ei   0      0     0    0     0    0
-    // 0  0  0  0  0  0  0   0  0  egr egr egr  0     0     0
-    // 0  0  0  0  0  0  0   0  0  egr egr egr  0     0     0
-    // 0  0  0  0  0  0  0   0  0  egr egr egr  0     0     0
-    // 0  0  0  0  0  0  0   0  0    0     0      0  ear ear ear
-    // 0  0  0  0  0  0  0   0  0    0     0      0  ear ear ear
-    // 0  0  0  0  0  0  0   0  0    0     0      0  ear ear ear
+    // 0  0  0  0  0  0  0   0  0  egr    egr   egr   0     0    0
+    // 0  0  0  0  0  0  0   0  0  egr    egr   egr   0     0    0
+    // 0  0  0  0  0  0  0   0  0  egr    egr   egr   0     0    0
+    // 0  0  0  0  0  0  0   0  0    0     0      0  ear   ear  ear
+    // 0  0  0  0  0  0  0   0  0    0     0      0  ear   ear  ear
+    // 0  0  0  0  0  0  0   0  0    0     0      0  ear   ear  ear
 
+    // 重投影误差的边
     int tot_in = 0, tot_out = 0;
     for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
     {
@@ -942,21 +943,21 @@ int Optimizer::PoseInertialOptimizationLastKeyFrame(Frame *pFrame, bool bRecInit
 
     // 设eie = ei->GetHessian2()+∑(e->GetHessian())
     // 则最终Hessian Matrix长这样
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // eie eie eie eie eie eie         ei ei ei   0      0     0    0     0    0
-    // ei    ei    ei    ei   ei   ei  ei ei ei   0      0     0    0     0    0
-    // ei    ei    ei    ei   ei   ei  ei ei ei   0      0     0    0     0    0
-    // ei    ei    ei    ei   ei   ei  ei ei ei   0      0     0    0     0    0
-    //  0     0     0     0     0    0   0   0  0  egr egr egr  0     0     0
-    //  0     0     0     0     0    0   0   0  0  egr egr egr  0     0     0
-    //  0     0     0     0     0    0   0   0  0  egr egr egr  0     0     0
-    //  0     0     0     0     0    0   0   0  0    0     0      0  ear ear ear
-    //  0     0     0     0     0    0   0   0  0    0     0      0  ear ear ear
-    //  0     0     0     0     0    0   0   0  0    0     0      0  ear ear ear
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // eie   eie   eie   eie   eie  eie   ei  ei  ei   0     0     0    0     0    0
+    // ei    ei    ei    ei    ei   ei    ei  ei  ei   0     0     0    0     0    0
+    // ei    ei    ei    ei    ei   ei    ei  ei  ei   0     0     0    0     0    0
+    // ei    ei    ei    ei    ei   ei    ei  ei  ei   0     0     0    0     0    0
+    //  0     0     0     0     0    0    0   0   0   egr   egr   egr   0     0    0
+    //  0     0     0     0     0    0    0   0   0   egr   egr   egr   0     0    0
+    //  0     0     0     0     0    0    0   0   0   egr   egr   egr   0     0    0
+    //  0     0     0     0     0    0    0   0   0    0     0      0  ear  ear  ear
+    //  0     0     0     0     0    0    0   0   0    0     0      0  ear  ear  ear
+    //  0     0     0     0     0    0    0   0   0    0     0      0  ear  ear  ear
 
     // 构造一个ConstraintPoseImu对象，为下一帧提供先验约束
     // 构造对象所使用的参数是当前帧P、V、BG、BA的估计值和H矩阵
@@ -971,10 +972,10 @@ int Optimizer::PoseInertialOptimizationLastKeyFrame(Frame *pFrame, bool bRecInit
  * @brief 使用上一帧+当前帧的视觉信息和IMU信息，优化当前帧位姿
  *
  * 可分为以下几个步骤：
- * // Step 1：创建g2o优化器，初始化顶点和边
- * // Step 2：启动多轮优化，剔除外点
- * // Step 3：更新当前帧位姿、速度、IMU偏置
- * // Step 4：记录当前帧的优化状态，包括参数信息和边缘化后的海森矩阵
+ * Step 1：创建g2o优化器，初始化顶点和边
+ * Step 2：启动多轮优化，剔除外点
+ * Step 3：更新当前帧位姿、速度、IMU偏置
+ * Step 4：记录当前帧的优化状态，包括参数信息和边缘化后的海森矩阵
  *
  * @param[in] pFrame 当前帧，也是待优化的帧
  * @param[in] bRecInit 调用这个函数的位置并没有传这个参数，因此它的值默认为false
@@ -2274,7 +2275,7 @@ void Optimizer::LocalInertialBA(
     }
 
     // Optimizable visual KFs
-    // 4. 做了一系列操作发现最后lpOptVisKFs为空。这段应该是调试遗留代码，如果实现的话其实就是把共视图中在前面没有加过的关键帧们加进来，
+    // Step 4. 做了一系列操作发现最后lpOptVisKFs为空。这段应该是调试遗留代码，如果实现的话其实就是把共视图中在前面没有加过的关键帧们加进来，
     // 但作者可能发现之前就把共视图的全部帧加进来了，也有可能发现优化的效果不好浪费时间
     // 获得与当前关键帧有共视关系的一些关键帧，大于15个点，排序为从小到大
     const int maxCovKF = 0;
@@ -2307,7 +2308,7 @@ void Optimizer::LocalInertialBA(
     }
 
     // Fixed KFs which are not covisible optimizable
-    // 5. 将所有mp点对应的关键帧（除了前面加过的）放入到固定组里面，后面优化时不改变
+    // Step 5. 将所有mp点对应的关键帧（除了前面加过的）放入到固定组里面，后面优化时不改变
     const int maxFixKF = 200;
 
     for (list<MapPoint *>::iterator lit = lLocalMapPoints.begin(), lend = lLocalMapPoints.end(); lit != lend; lit++)
@@ -2334,7 +2335,7 @@ void Optimizer::LocalInertialBA(
     bool bNonFixed = (lFixedKeyFrames.size() == 0);
 
     // Setup optimizer
-    // 6. 构造优化器，正式开始优化
+    // Step 6. 构造优化器，正式开始优化
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolverX::LinearSolverType *linearSolver;
     linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
@@ -2355,7 +2356,7 @@ void Optimizer::LocalInertialBA(
     }
 
     // Set Local temporal KeyFrame vertices
-    // 7. 建立关于关键帧的节点，其中包括，位姿，速度，以及两个偏置
+    // Step 7. 建立关于关键帧的节点，其中包括，位姿，速度，以及两个偏置
     N = vpOptimizableKFs.size();
     for (int i = 0; i < N; i++)
     {
@@ -2384,7 +2385,7 @@ void Optimizer::LocalInertialBA(
     }
 
     // Set Local visual KeyFrame vertices
-    // 8. 建立关于共视关键帧的节点，但这里为空
+    // Step 8. 建立关于共视关键帧的节点，但这里为空
     for (list<KeyFrame *>::iterator it = lpOptVisKFs.begin(), itEnd = lpOptVisKFs.end(); it != itEnd; it++)
     {
         KeyFrame *pKFi = *it;
@@ -2395,7 +2396,7 @@ void Optimizer::LocalInertialBA(
     }
 
     // Set Fixed KeyFrame vertices
-    // 9. 建立关于固定关键帧的节点，其中包括，位姿，速度，以及两个偏置
+    // Step 9. 建立关于固定关键帧的节点，其中包括，位姿，速度，以及两个偏置
     for (list<KeyFrame *>::iterator lit = lFixedKeyFrames.begin(), lend = lFixedKeyFrames.end(); lit != lend; lit++)
     {
         KeyFrame *pKFi = *lit;
@@ -2421,12 +2422,11 @@ void Optimizer::LocalInertialBA(
         }
     }
 
-    // Create intertial constraints
-    // 暂时没看到有什么用
+    // Create intertial constraints，存储边
     vector<EdgeInertial *> vei(N, (EdgeInertial *)NULL);
     vector<EdgeGyroRW *> vegr(N, (EdgeGyroRW *)NULL);
     vector<EdgeAccRW *> vear(N, (EdgeAccRW *)NULL);
-    // 10. 建立惯性边，没有imu跳过
+    // Step 10. 建立惯性边，没有imu跳过
     for (int i = 0; i < N; i++)
     {
         KeyFrame *pKFi = vpOptimizableKFs[i];
@@ -2522,7 +2522,7 @@ void Optimizer::LocalInertialBA(
     vector<MapPoint *> vpMapPointEdgeStereo;
     vpMapPointEdgeStereo.reserve(nExpectedSize);
 
-    // 11. 建立视觉边
+    // Step 11. 建立视觉边
     const float thHuberMono = sqrt(5.991);
     const float chi2Mono2 = 5.991;
     const float thHuberStereo = sqrt(7.815);
@@ -2676,7 +2676,7 @@ void Optimizer::LocalInertialBA(
         assert(mit->second >= 3);
     }
 
-    // 12. 开始优化
+    // Step 12. 开始优化
     optimizer.initializeOptimization();
     optimizer.computeActiveErrors();
 
@@ -2689,7 +2689,7 @@ void Optimizer::LocalInertialBA(
     vector<pair<KeyFrame *, MapPoint *>> vToErase;
     vToErase.reserve(vpEdgesMono.size() + vpEdgesStereo.size());
 
-    // 13. 开始确认待删除的连接关系
+    // Step 13. 开始确认待删除的连接关系
     // Check inlier observations
     // Mono
     for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
@@ -2734,7 +2734,7 @@ void Optimizer::LocalInertialBA(
         return;
     }
 
-    // 14. 删除连接关系
+    // Step 14. 删除连接关系
     if (!vToErase.empty())
     {
         for (size_t i = 0; i < vToErase.size(); i++)
@@ -2749,7 +2749,7 @@ void Optimizer::LocalInertialBA(
     for (list<KeyFrame *>::iterator lit = lFixedKeyFrames.begin(), lend = lFixedKeyFrames.end(); lit != lend; lit++)
         (*lit)->mnBAFixedForKF = 0;
 
-    // 15. 取出结果
+    // Step 15. 取出结果
     // Recover optimized data
     // Local temporal Keyframes
     N = vpOptimizableKFs.size();

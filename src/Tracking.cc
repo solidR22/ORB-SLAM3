@@ -1886,7 +1886,7 @@ void Tracking::PreintegrateIMU()
  * 两个地方用到：
  * 1. 匀速模型计算速度,但并没有给当前帧位姿赋值；
  * 2. 跟踪丢失时不直接判定丢失，通过这个函数预测当前帧位姿看看能不能拽回来，代替纯视觉中的重定位
- * 
+ * 3. 对应3.2节公式 2 3 4
  * @return true 
  * @return false 
  */
@@ -1906,7 +1906,7 @@ bool Tracking::PredictStateIMU()
     // 地图更新后会更新关键帧与MP，所以相对于关键帧更准
     // 而没更新的话，距离上一帧更近，计算起来误差更小
     // 地图更新时，并且上一个图像关键帧存在
-    if(mbMapUpdated && mpLastKeyFrame)
+    if(mbMapUpdated && mpLastKeyFrame) // 从上一个关键帧积分
     {
         const Eigen::Vector3f twb1 = mpLastKeyFrame->GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mpLastKeyFrame->GetImuRotation();
@@ -1931,7 +1931,7 @@ bool Tracking::PredictStateIMU()
         return true;
     }
     // 地图未更新时
-    else if(!mbMapUpdated)
+    else if(!mbMapUpdated)        // 从上一个普通帧积分
     {
         const Eigen::Vector3f twb1 = mLastFrame.GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mLastFrame.GetImuRotation();

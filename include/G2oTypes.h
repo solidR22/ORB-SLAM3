@@ -129,7 +129,7 @@ public:
 };
 
 // Optimizable parameters are IMU pose
-// 优化中关于位姿的节点，6自由度
+// 优化中关于位姿的节点，6自由度，旋转，平移
 class VertexPose : public g2o::BaseVertex<6, ImuCamPose>
 {
 public:
@@ -158,7 +158,7 @@ public:
         // 官方讲解cache
         // 需要在oplusImpl与setEstimate函数中添加
         _estimate.Update(update_);
-        updateCache();
+        updateCache(); // 加速
     }
 };
 
@@ -357,7 +357,7 @@ public:
 
     virtual void oplusImpl(const double *update_)
     {
-        setEstimate(estimate() * exp(*update_));
+        setEstimate(estimate() * exp(*update_)); // 防止尺度为负值
     }
 };
 
@@ -492,7 +492,7 @@ public:
 };
 
 /** 
- * @brief 双目位姿三维点二元边
+ * @brief 双目位姿三维点二元边（极限矫正后为双目），左相机像素误差2维，右相机像素误差1维
  */
 class EdgeStereo : public g2o::BaseBinaryEdge<3, Eigen::Vector3d, g2o::VertexSBAPointXYZ, VertexPose>
 {
@@ -571,7 +571,8 @@ public:
 };
 
 /** 
- * @brief 惯性边（误差为残差）
+ * @brief 惯性边（误差为残差），继承多维边
+ * 连接两个帧，所以有两个帧的数据参与优化
  */
 class EdgeInertial : public g2o::BaseMultiEdge<9, Vector9d>
 {

@@ -43,7 +43,7 @@ class LocalMapping
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    LocalMapping(System* pSys, Atlas* pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName=std::string());
+    LocalMapping(System* pSys, Atlas* pAtlas, bool bMonocular, bool bInertial, const string &_strSeqName=std::string());
 
     void SetLoopCloser(LoopClosing* pLoopCloser);
 
@@ -187,13 +187,13 @@ protected:
     void InitializeIMU(float priorG = 1e2, float priorA = 1e6, bool bFirst = false);
     void ScaleRefinement();
 
-    bool bInitializing;
+    bool bInitializing;  // 正在进行IMU初始化BA
 
     Eigen::MatrixXd infoInertial;
     int mNumLM;
     int mNumKFCulling;
 
-    float mTinit;
+    float mTinit;        // 初始化时用，累积运行时间
 
     int countRefinement;
 

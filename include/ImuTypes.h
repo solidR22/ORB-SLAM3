@@ -40,8 +40,9 @@ namespace ORB_SLAM3
 namespace IMU
 {
 
-const float GRAVITY_VALUE=9.81;
+const float GRAVITY_VALUE=9.81; // 定义重力
 
+//一个IMU的观测
 //IMU measurement (gyro, accelerometer and timestamp)
 class Point
 {
@@ -125,7 +126,7 @@ public:
     bool mbIsSet;
 };
 
-//Integration of 1 gyro measurement
+//Integration of 1 gyro measurement，积分一次角度（角度单独用一个类）
 class IntegratedRotation
 {
 public:
@@ -208,25 +209,25 @@ public:
     }
 
 public:
-    float dT;
-    Eigen::Matrix<float,15,15> C;
-    Eigen::Matrix<float,15,15> Info;
-    Eigen::DiagonalMatrix<float,6> Nga, NgaWalk;
+    float dT;                     // 这段预积分的时间
+    Eigen::Matrix<float,15,15> C; // 协方差矩阵
+    Eigen::Matrix<float,15,15> Info;  // 信息矩阵
+    Eigen::DiagonalMatrix<float,6> Nga, NgaWalk; // 噪声，随机游走
 
     // Values for the original bias (when integration was computed)
-    Bias b;
-    Eigen::Matrix3f dR;
-    Eigen::Vector3f dV, dP;
-    Eigen::Matrix3f JRg, JVg, JVa, JPg, JPa;
+    Bias b;                                  // 更新前的偏置
+    Eigen::Matrix3f dR;                      // 预积分
+    Eigen::Vector3f dV, dP;                  // 预积分
+    Eigen::Matrix3f JRg, JVg, JVa, JPg, JPa; // 雅克比矩阵
     Eigen::Vector3f avgA, avgW;
 
 
 private:
     // Updated bias
-    Bias bu;    //更新后的零偏
+    Bias bu;                                 //更新后的零偏
     // Dif between original and updated bias
     // This is used to compute the updated values of the preintegration
-    Eigen::Matrix<float,6,1> db;
+    Eigen::Matrix<float,6,1> db;             // b更新到bu的更新的量
 
     struct integrable
     {
@@ -251,10 +252,10 @@ private:
 };
 
 // Lie Algebra Functions
-Eigen::Matrix3f RightJacobianSO3(const float &x, const float &y, const float &z);
+Eigen::Matrix3f RightJacobianSO3(const float &x, const float &y, const float &z);    // 计算右雅可比，对应公式1.6
 Eigen::Matrix3f RightJacobianSO3(const Eigen::Vector3f &v);
 
-Eigen::Matrix3f InverseRightJacobianSO3(const float &x, const float &y, const float &z);
+Eigen::Matrix3f InverseRightJacobianSO3(const float &x, const float &y, const float &z);  // 计算右雅可比的逆，对应公式1.7
 Eigen::Matrix3f InverseRightJacobianSO3(const Eigen::Vector3f &v);
 
 Eigen::Matrix3f NormalizeRotation(const Eigen::Matrix3f &R);

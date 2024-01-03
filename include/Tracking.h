@@ -64,17 +64,19 @@ public:
     ~Tracking();
 
     // Parse the config file
+    // 读取配置文件
     bool ParseCamParamFile(cv::FileStorage &fSettings);
     bool ParseORBParamFile(cv::FileStorage &fSettings);
     bool ParseIMUParamFile(cv::FileStorage &fSettings);
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
+    // 跟踪图像，输出位姿
     Sophus::SE3f GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp, string filename);
     Sophus::SE3f GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp, string filename);
     Sophus::SE3f GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename);
-
+    // 放置IMU数据
     void GrabImuData(const IMU::Point &imuMeasurement);
-
+    // 设置线程指针
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);
@@ -87,7 +89,7 @@ public:
 
     // Use this function if you have deactivated local mapping and you only want to localize the camera.
     void InformOnlyTracking(const bool &flag);
-
+    // 更新了关键帧的位姿，后修改普通帧的位姿，通过IMU积分更新速度，localmapping中初始化IMU使用
     void UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurrentKeyFrame);
     KeyFrame* GetLastKeyFrame()
     {
@@ -98,13 +100,14 @@ public:
     {
         mpPointCloudMapping = pPointCloudMapping;
     }
-
+    // 新建地图
     void CreateMapInAtlas();
     //std::mutex mMutexTracks;
 
-    //--
+    // 更新数据集
     void NewDataset();
     int GetNumberDataset();
+    // 获取匹配内点总数
     int GetMatchesInliers();
 
     //DEBUG
@@ -124,13 +127,13 @@ public:
 
     // Tracking states
     enum eTrackingState{
-        SYSTEM_NOT_READY=-1,
-        NO_IMAGES_YET=0,
-        NOT_INITIALIZED=1,
-        OK=2,
-        RECENTLY_LOST=3,
-        LOST=4,
-        OK_KLT=5
+        SYSTEM_NOT_READY=-1,            // 系统没有准备好的状态：启动后加载配置文件和词典时
+        NO_IMAGES_YET=0,                // 当前无图像
+        NOT_INITIALIZED=1,              // 有图像但是没有完成初始化
+        OK=2,                           // 正常跟踪状态
+        RECENTLY_LOST=3,                // IMU模式，当前地图KF > 10，且丢失时间 < 5s。
+        LOST=4,                         // IMU模式，当前帧丢失时间 > 5s，重定位失败
+        OK_KLT=5                        // 没用
     };
 
     eTrackingState mState;
@@ -154,6 +157,7 @@ public:
 
     // Lists used to recover the full camera trajectory at the end of the execution.
     // Basically we store the reference keyframe for each frame and its relative transformation
+    // 代码结束后保存位姿用
     list<Sophus::SE3f> mlRelativeFramePoses;
     list<KeyFrame*> mlpReferences;
     list<double> mlFrameTimes;
@@ -236,7 +240,7 @@ protected:
     // Reset IMU biases and compute frame velocity
     void ResetFrameIMU();
 
-    bool mbMapUpdated;
+    bool mbMapUpdated; // 地图是否更新了
 
     // Imu preintegration from last frame
     IMU::Preintegrated *mpImuPreintegratedFromLastKF;
@@ -310,7 +314,7 @@ protected:
     int mMaxFrames;
 
     int mnFirstImuFrameId;
-    int mnFramesToResetIMU;
+    int mnFramesToResetIMU; // 经过多少帧后可以重置IMU，一般设置和帧率相同，对应的时间1s
 
     // Threshold close/far points
     // Points seen as close by the stereo/RGBD sensor are considered reliable
