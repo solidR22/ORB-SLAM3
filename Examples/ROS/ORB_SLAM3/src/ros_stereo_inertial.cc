@@ -28,6 +28,7 @@
 #include<ros/ros.h>
 #include<cv_bridge/cv_bridge.h>
 #include<sensor_msgs/Imu.h>
+#include<sensor_msgs/CompressedImage.h>
 
 #include<opencv2/core/core.hpp>
 
@@ -35,6 +36,9 @@
 #include"../include/ImuTypes.h"
 
 using namespace std;
+
+//#define imgType ImageConstPtr
+#define imgType CompressedImageConstPtr
 
 class ImuGrabber
 {
@@ -51,12 +55,12 @@ class ImageGrabber
 public:
     ImageGrabber(ORB_SLAM3::System* pSLAM, ImuGrabber *pImuGb, const bool bRect, const bool bClahe): mpSLAM(pSLAM), mpImuGb(pImuGb), do_rectify(bRect), mbClahe(bClahe){}
 
-    void GrabImageLeft(const sensor_msgs::ImageConstPtr& msg);
-    void GrabImageRight(const sensor_msgs::ImageConstPtr& msg);
-    cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
+    void GrabImageLeft(const sensor_msgs::imgType& msg);
+    void GrabImageRight(const sensor_msgs::imgType& msg);
+    cv::Mat GetImage(const sensor_msgs::imgType &img_msg);
     void SyncWithImu();
 
-    queue<sensor_msgs::ImageConstPtr> imgLeftBuf, imgRightBuf;
+    queue<sensor_msgs::imgType> imgLeftBuf, imgRightBuf;
     std::mutex mBufMutexLeft,mBufMutexRight;
    
     ORB_SLAM3::System* mpSLAM;
@@ -138,10 +142,12 @@ int main(int argc, char **argv)
     }
 
   // Maximum delay, 5 seconds
-  ros::Subscriber sub_imu = n.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb); 
-  ros::Subscriber sub_img_left = n.subscribe("/camera/left/image_raw", 100, &ImageGrabber::GrabImageLeft,&igb);
-  ros::Subscriber sub_img_right = n.subscribe("/camera/right/image_raw", 100, &ImageGrabber::GrabImageRight,&igb);
-
+//  ros::Subscriber sub_imu = n.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb);
+//  ros::Subscriber sub_img_left = n.subscribe("/camera/left/image_raw", 100, &ImageGrabber::GrabImageLeft,&igb);
+//  ros::Subscriber sub_img_right = n.subscribe("/camera/right/image_raw", 100, &ImageGrabber::GrabImageRight,&igb);
+    ros::Subscriber sub_imu = n.subscribe("/imu/imu", 1000, &ImuGrabber::GrabImu, &imugb);
+    ros::Subscriber sub_img_left = n.subscribe("/slave1/image_raw/compressed", 100, &ImageGrabber::GrabImageLeft,&igb);
+    ros::Subscriber sub_img_right = n.subscribe("/slave2/image_raw/compressed", 100, &ImageGrabber::GrabImageRight,&igb);
   std::thread sync_thread(&ImageGrabber::SyncWithImu,&igb);
 
   ros::spin();
@@ -151,7 +157,7 @@ int main(int argc, char **argv)
 
 
 
-void ImageGrabber::GrabImageLeft(const sensor_msgs::ImageConstPtr &img_msg)
+void ImageGrabber::GrabImageLeft(const sensor_msgs::imgType &img_msg)
 {
   mBufMutexLeft.lock();
   if (!imgLeftBuf.empty())
@@ -160,7 +166,7 @@ void ImageGrabber::GrabImageLeft(const sensor_msgs::ImageConstPtr &img_msg)
   mBufMutexLeft.unlock();
 }
 
-void ImageGrabber::GrabImageRight(const sensor_msgs::ImageConstPtr &img_msg)
+void ImageGrabber::GrabImageRight(const sensor_msgs::imgType &img_msg)
 {
   mBufMutexRight.lock();
   if (!imgRightBuf.empty())
@@ -169,13 +175,14 @@ void ImageGrabber::GrabImageRight(const sensor_msgs::ImageConstPtr &img_msg)
   mBufMutexRight.unlock();
 }
 
-cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
+cv::Mat ImageGrabber::GetImage(const sensor_msgs::imgType &img_msg)
 {
   // Copy the ros image message to cv::Mat.
   cv_bridge::CvImageConstPtr cv_ptr;
   try
   {
-    cv_ptr = cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::MONO8);
+//     cv_ptr = cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::MONO8);
+    cv_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
   }
   catch (cv_bridge::Exception& e)
   {
@@ -189,6 +196,8 @@ cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
   else
   {
     std::cout << "Error type" << std::endl;
+    cv::imshow("test", cv_ptr->image);
+    cv::waitKey(1);
     return cv_ptr->image.clone();
   }
 }

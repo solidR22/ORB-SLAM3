@@ -33,6 +33,9 @@
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
 
+cv::Size clahe_tiles(720/50, 480/50);
+cv::Ptr<cv::CLAHE> pclahe = cv::createCLAHE(3, clahe_tiles);
+
 namespace ORB_SLAM3
 {
 
@@ -89,6 +92,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     cv::FileNode node = fsSettings["File.version"];
     if(!node.empty() && node.isString() && node.string() == "1.0")
     {
+        // 会计算立体矫正参数
         settings_ = new Settings(strSettingsFile,mSensor);
 
         // 保存及加载地图的名字
@@ -126,6 +130,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     // ORBSLAM3新加的多地图管理功能，这里加载Atlas标识符
     bool loadedAtlas = false;
 
+    // 没有预加载的地图
     if(mStrLoadAtlasFromFile.empty())
     {
         //Load ORB Vocabulary
@@ -153,7 +158,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         cout << "Initialization of Atlas from scratch " << endl;
         mpAtlas = new Atlas(0);
     }
-    else
+    else // 有预加载的地图
     {
         //Load ORB Vocabulary
         cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
@@ -254,7 +259,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
-    if(mSensor==STEREO || mSensor==IMU_STEREO || mSensor==RGBD)
+    // if(mSensor==STEREO || mSensor==IMU_STEREO || mSensor==RGBD)
+    if(mSensor==RGBD || mSensor == IMU_RGBD)
     {
         // for point cloud resolution
         float resolution = fsSettings["PointCloudMapping.Resolution"];
@@ -294,8 +300,9 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         cerr << "ERROR: you called TrackStereo but input sensor was not set to Stereo nor Stereo-Inertial." << endl;
         exit(-1);
     }
-
+    assert(!imLeft.empty() && !imRight.empty());
     cv::Mat imLeftToFeed, imRightToFeed;
+    // 只有在给定的相机为双目立体相机时才不需要立体矫正
     if(settings_ && settings_->needToRectify()){
         cv::Mat M1l = settings_->M1l();
         cv::Mat M2l = settings_->M2l();
@@ -313,6 +320,10 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         imLeftToFeed = imLeft.clone();
         imRightToFeed = imRight.clone();
     }
+
+    // CLAHE
+    pclahe->apply(imLeftToFeed, imLeftToFeed);
+    pclahe->apply(imRightToFeed, imRightToFeed);
 
     // Check mode change
     {

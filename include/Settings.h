@@ -162,7 +162,7 @@ namespace ORB_SLAM3 {
         /*
          * Visual stuff
          */
-        GeometricCamera* calibration1_, *calibration2_;   //Camera calibration
+        GeometricCamera* calibration1_, *calibration2_;   //Camera calibration，双目相机时只有一个相机
         GeometricCamera* originalCalib1_, *originalCalib2_;
         std::vector<float> vPinHoleDistorsion1_, vPinHoleDistorsion2_;
 

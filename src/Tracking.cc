@@ -558,7 +558,7 @@ Tracking::~Tracking()
 }
 
 /**
- * @brief 根据参数类读取参数，可快速略过不看
+ * @brief 根据参数类读取参数
  * @param settings 参数类
  */
 void Tracking::newParameterLoader(Settings *settings) {
@@ -588,7 +588,7 @@ void Tracking::newParameterLoader(Settings *settings) {
     mK_(0,2) = mpCamera->getParameter(2);
     mK_(1,2) = mpCamera->getParameter(3);
 
-    // 读取相机2
+    // 读取相机2，只有在KannalaBrandt模型才有
     if((mSensor==System::STEREO || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD) &&
         settings->cameraType() == Settings::KannalaBrandt){
         mpCamera2 = settings->camera2();

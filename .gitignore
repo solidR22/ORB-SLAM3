@@ -102,3 +102,4 @@ Examples_old/Stereo-Inertial/stereo_inertial_realsense_t265_old
 Examples_old/*
 cmake-build-release/*
 .idea/*
+Examples/ROS/ORB_SLAM3/.idea/
