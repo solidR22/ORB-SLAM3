@@ -152,7 +152,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     if(mvKeys.empty())
         return;
 
-    // Step 4 用OpenCV的矫正函数、内参对提取到的特征点进行矫正
+    // Step 4 用OpenCV的矫正函数、内参对提取到的特征点进行矫正，已经去畸变了，似乎不需要？
     UndistortKeyPoints();
 
 #ifdef REGISTER_TIMES

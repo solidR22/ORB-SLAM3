@@ -225,14 +225,14 @@ public:
     // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
     // In the stereo case, mvKeysUn is redundant as images must be rectified.
     // In the RGB-D case, RGB images can be distorted.
-    std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
+    std::vector<cv::KeyPoint> mvKeys, mvKeysRight;   // 存储特征点，在双目中已经做过立体矫正去畸变
     std::vector<cv::KeyPoint> mvKeysUn;
 
     // Corresponding stereo coordinate and depth for each keypoint.
     std::vector<MapPoint*> mvpMapPoints;
     // "Monocular" keypoints have a negative value.
-    std::vector<float> mvuRight; // pFrame->mvuRight[i] < 0为单目
-    std::vector<float> mvDepth;
+    std::vector<float> mvuRight; // pFrame->mvuRight[i] < 0为单目，存储右图匹配点索引，误匹配点置为-1
+    std::vector<float> mvDepth;  // 存储特征点深度索引，误匹配点置为-1
 
     // Bag of Words Vector structures.
     DBoW2::BowVector mBowVec;

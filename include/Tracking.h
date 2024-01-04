@@ -368,6 +368,8 @@ protected:
     Sophus::SE3f mTlr;
 
     void newParameterLoader(Settings* settings);
+    // 直方图均匀化
+    cv::Ptr<cv::CLAHE> mpclahe;
 
 #ifdef REGISTER_LOOP
     bool Stop();

@@ -142,6 +142,10 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         }
     }
 
+    // 设置直方图
+    cv::Size clahe_tiles(settings->newImSize().width/FRAME_GRID_COLS, settings->newImSize().height/FRAME_GRID_ROWS);
+    mpclahe = cv::createCLAHE(3, clahe_tiles);
+
 #ifdef REGISTER_TIMES
     vdRectStereo_ms.clear();
     vdResizeImage_ms.clear();
@@ -1559,7 +1563,12 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
         }
     }
 
+    // CLAHE
+    mpclahe->apply(mImGray, mImGray);
+    mpclahe->apply(imGrayRight, imGrayRight);
+
     //cout << "Incoming frame creation" << endl;
+    // 提取特征点并做双目立体匹配
     // 双目模式，注意跟两个相机模式区分开
     if (mSensor == System::STEREO && !mpCamera2)
         mCurrentFrame = Frame(
@@ -1576,6 +1585,7 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
             mpCamera);				// 相机模型
     else if(mSensor == System::STEREO && mpCamera2)
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr);
+    // 双目IMU
     else if(mSensor == System::IMU_STEREO && !mpCamera2)
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
     else if(mSensor == System::IMU_STEREO && mpCamera2)

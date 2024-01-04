@@ -33,9 +33,6 @@
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
 
-cv::Size clahe_tiles(720/50, 480/50);
-cv::Ptr<cv::CLAHE> pclahe = cv::createCLAHE(3, clahe_tiles);
-
 namespace ORB_SLAM3
 {
 
@@ -320,10 +317,6 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         imLeftToFeed = imLeft.clone();
         imRightToFeed = imRight.clone();
     }
-
-    // CLAHE
-    pclahe->apply(imLeftToFeed, imLeftToFeed);
-    pclahe->apply(imRightToFeed, imRightToFeed);
 
     // Check mode change
     {
